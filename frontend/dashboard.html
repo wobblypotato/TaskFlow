@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaskFlow — Workspace</title>
+  <meta name="description" content="Cinematic, minimal, collaborative workspace for high-velocity teams.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/auth.js"></script>
+  <script>
+    // Enforce authentication before render
+    auth.requireAuth();
+  </script>
+</head>
+<body>
+  <!-- Minimalist Header -->
+  <header class="navbar">
+    <div class="container navbar-inner">
+      <div class="brand-wrapper">
+        <a href="dashboard.html" class="brand" aria-label="TaskFlow Workspace">
+          <div class="brand-icon">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <span>TaskFlow</span>
+        </a>
+        <span class="brand-slash">/</span>
+        <span class="workspace-label">Workspace</span>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="header-nav" role="tablist">
+        <button type="button" class="nav-tab-link active" id="tab-overview" role="tab" aria-selected="true">Dashboard</button>
+        <button type="button" class="nav-tab-link" id="tab-tasks" role="tab" aria-selected="false">Tasks <span id="tab-tasks-count" style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted); margin-left: 0.2rem;">0</span></button>
+        <button type="button" class="nav-tab-link" id="tab-analytics" role="tab" aria-selected="false">Analytics</button>
+        <button type="button" class="nav-tab-link" id="tab-activity" role="tab" aria-selected="false">Activity</button>
+        <button type="button" class="nav-tab-link" id="tab-team" role="tab" aria-selected="false">Team</button>
+      </nav>
+
+      <!-- Right Controls -->
+      <div class="header-right">
+        <!-- Live Online Indicator -->
+        <div style="position: relative;">
+          <button type="button" id="presence-toggle-btn" class="presence-pill-btn" title="Online members">
+            <span class="dot-online"></span>
+            <span id="online-count-text">1 online</span>
+          </button>
+          <div id="presence-dropdown" class="dropdown-flyout" style="display: none;">
+            <div class="flyout-header">
+              <span>People Online</span>
+              <span class="dot-online"></span>
+            </div>
+            <ul id="online-users-list" class="flyout-list">
+              <li class="flyout-empty">Connecting...</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Notification Bell -->
+        <div style="position: relative;">
+          <button type="button" id="notif-toggle-btn" class="header-icon-btn" title="Notifications" aria-label="Notifications">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            <span id="notif-count-badge" class="notif-badge-dot" style="display: none;"></span>
+          </button>
+          <div id="notifications-dropdown" class="dropdown-flyout" style="display: none; width: 300px;">
+            <div class="flyout-header">
+              <span>Activity Notifications</span>
+              <button type="button" id="clear-notifs-btn" style="color: var(--text-muted); cursor: pointer; font-size: 0.7rem;">Clear</button>
+            </div>
+            <div id="notifications-list" class="flyout-list">
+              <div class="flyout-empty">No unread notifications</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- User Greeting & Log Out -->
+        <div class="header-user-btn">
+          <div class="profile-menu">
+            <button type="button" id="profile-menu-toggle" class="profile-menu-toggle" aria-haspopup="true" aria-expanded="false">
+              <span class="user-avatar-initial" id="user-avatar"><span id="user-avatar-initial">M</span><img id="user-avatar-image" alt="" hidden></span>
+              <span id="user-name" style="font-size: 0.8rem; font-weight: 500;">Moksh</span>
+              <span aria-hidden="true">⌄</span>
+            </button>
+            <div id="profile-menu-dropdown" class="profile-menu-dropdown" hidden>
+              <button type="button" id="edit-profile-btn">Edit profile</button>
+            </div>
+          </div>
+          <button id="logout-btn" class="header-logout-btn" title="Sign out" aria-label="Sign out">Log out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Offline Alert -->
+    <div id="db-status-banner" style="display: none; padding: 0.75rem 1rem; margin-top: 1rem; background-color: var(--danger-muted); border: 1px solid rgba(239,68,68,0.25); border-radius: var(--radius-sm); font-size: 0.8rem; color: var(--danger);">
+      <strong>MongoDB Disconnected:</strong> Verify database connection in <code>backend/.env</code>.
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- VIEW 1: CINEMATIC EDITORIAL DASHBOARD                                -->
+    <!-- ==================================================================== -->
+    <div id="view-overview" role="tabpanel" aria-labelledby="tab-overview">
+      <!-- Cinematic Hero -->
+      <section class="editorial-hero">
+        <div class="hero-header-lockup">
+          <div class="hero-date-badge">
+            <span class="dot-live-indicator"></span>
+            <span id="current-date-text">TODAY</span>
+          </div>
+          <span class="hero-meta-divider">—</span>
+          <span class="hero-kicker">WORKSPACE FOCUS</span>
+        </div>
+
+        <h1 class="hero-greeting" id="hero-greeting">GOOD MORNING, MOKSH</h1>
+        <p class="hero-subline">Your workspace is moving forward.</p>
+
+        <!-- Dramatic Asymmetric Stat Strip -->
+        <div class="editorial-metric-strip">
+          <div class="large-stat-block">
+            <div class="large-stat-number" id="stat-completion-rate">0%</div>
+            <div class="large-stat-label-group">
+              <span class="large-stat-title">Complete</span>
+              <span class="large-stat-desc">Sprint completion velocity</span>
+            </div>
+          </div>
+
+          <div class="hero-breakdown-table">
+            <div class="breakdown-col">
+              <span class="breakdown-col-num" id="stat-total">0</span>
+              <span class="breakdown-col-label">Total</span>
+            </div>
+            <div class="breakdown-col">
+              <span class="breakdown-col-num" id="stat-completed" style="color: var(--success);">0</span>
+              <span class="breakdown-col-label">Done</span>
+            </div>
+            <div class="breakdown-col">
+              <span class="breakdown-col-num" id="stat-pending">0</span>
+              <span class="breakdown-col-label">Pending</span>
+            </div>
+            <div class="breakdown-col">
+              <span class="breakdown-col-num" id="stat-overdue" style="color: var(--danger);">0</span>
+              <span class="breakdown-col-label">Overdue</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Asymmetric Section: Activity Feed & Upcoming Deadlines -->
+      <section class="editorial-section">
+        <div class="two-col-editorial-grid">
+          <!-- Column 1: Minimal Activity Timeline -->
+          <div class="editorial-col">
+            <div class="section-head">
+              <h2 class="section-title">Recent Activity</h2>
+              <span class="section-action" onclick="switchToTab('activity')">Full audit log →</span>
+            </div>
+            <div id="dashboard-activity-list" class="timeline-stream">
+              <p class="chart-empty">No recent activity</p>
+            </div>
+          </div>
+
+          <!-- Column 2: Upcoming Deadlines & Subtle Velocity Horizon -->
+          <div class="editorial-col">
+            <div class="section-head">
+              <div style="display: flex; align-items: baseline; gap: 0.65rem;">
+                <h2 class="section-title">Upcoming Deadlines</h2>
+                <span id="deadlines-count-pill" class="deadlines-sub-pill" style="display: none;">0 due</span>
+              </div>
+              <span class="section-action" onclick="switchToTab('tasks')">All tasks →</span>
+            </div>
+
+            <!-- Deadlines Stream or Elegant Empty State -->
+            <div id="dashboard-deadlines-list" class="upcoming-deadlines-stream">
+              <p class="chart-empty">No scheduled deadlines</p>
+            </div>
+
+            <!-- ONE Subtle Monochrome Productivity Visualization -->
+            <div id="dashboard-productivity-viz" class="editorial-productivity-viz">
+              <div class="productivity-viz-head">
+                <span class="productivity-viz-title">7-Day Completion Velocity</span>
+                <span class="productivity-viz-stat" id="viz-shipped-stat">0 shipped</span>
+              </div>
+              <div id="editorial-velocity-bars" class="productivity-viz-bars">
+                <!-- 7 discrete monochrome bars rendered from real stats.completedByDay -->
+              </div>
+              <div class="productivity-viz-foot">
+                <div class="productivity-track-line">
+                  <div class="productivity-track-fill" id="viz-track-fill" style="width: 0%;"></div>
+                </div>
+                <div class="productivity-track-labels">
+                  <span id="viz-completion-rate-text">0% complete</span>
+                  <span id="viz-active-total-text">0 total</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Minimal Velocity Breakdown -->
+      <section class="editorial-section" style="border-bottom: none;">
+        <div class="section-head">
+          <h2 class="section-title">Velocity Breakdown</h2>
+          <span class="section-action" onclick="switchToTab('analytics')">Detailed charts →</span>
+        </div>
+        <div class="cinematic-analytics-grid">
+          <div class="chart-editorial-box">
+            <span class="chart-header-sub">Tasks by Status</span>
+            <div id="dashboard-mini-status" class="minimal-bars-list"></div>
+          </div>
+          <div class="chart-editorial-box">
+            <span class="chart-header-sub">Tasks by Priority</span>
+            <div id="dashboard-mini-priority" class="minimal-bars-list"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- VIEW 2: LINEAR-STYLE TASKS (MINIMAL ROW LIST, NOT GIANT CARDS)       -->
+    <!-- ==================================================================== -->
+    <div id="view-tasks" role="tabpanel" aria-labelledby="tab-tasks" style="display: none; padding-top: 2rem;">
+      <!-- Minimalist Toolbar -->
+      <div class="minimal-toolbar">
+        <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+          <div class="search-field-wrapper">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="search-input" class="search-input" placeholder="Search tasks..." aria-label="Search tasks">
+            <span class="kbd-tag">/</span>
+          </div>
+
+          <!-- Scope Switcher -->
+          <div class="scope-switch">
+            <button type="button" id="scope-workspace-btn" class="scope-btn active" onclick="setTaskScope('workspace')">Workspace</button>
+            <button type="button" id="scope-my-btn" class="scope-btn" onclick="setTaskScope('my')">My Tasks</button>
+          </div>
+        </div>
+
+        <div class="filter-selects-group">
+          <select id="status-filter" class="minimal-select" aria-label="Filter status">
+            <option value="all">Status: All</option>
+            <option value="todo">Todo</option>
+            <option value="in-progress">In Progress</option>
+            <option value="completed">Completed</option>
+          </select>
+
+          <select id="priority-filter" class="minimal-select" aria-label="Filter priority">
+            <option value="all">Priority: All</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+
+          <select id="sort-by" class="minimal-select" aria-label="Sort">
+            <option value="createdAt-desc">Newest First</option>
+            <option value="createdAt-asc">Oldest First</option>
+            <option value="dueDate-asc">Deadline Earliest</option>
+            <option value="dueDate-desc">Deadline Latest</option>
+            <option value="priority-desc">Priority High to Low</option>
+            <option value="title-asc">Title (A-Z)</option>
+          </select>
+
+          <button type="button" id="open-create-modal-btn" class="btn-primary-action" title="Create task (N)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>New Task</span>
+            <span style="font-family: var(--font-mono); font-size: 0.65rem; opacity: 0.7;">N</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Active Filter Chips Bar -->
+      <div id="active-filters-bar" style="display: none; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; font-size: 0.75rem;">
+        <span style="color: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase;">Active Filters:</span>
+        <div id="active-filter-chips" style="display: flex; gap: 0.4rem; flex-wrap: wrap;"></div>
+        <button type="button" onclick="clearAllFilters()" style="color: var(--text-secondary); cursor: pointer; text-decoration: underline; margin-left: auto;">Clear all</button>
+      </div>
+
+      <!-- Tag Filter Banner (Compatibility) -->
+      <div id="active-tag-banner" style="display: none; align-items: center; gap: 0.5rem; margin-bottom: 1rem; font-size: 0.75rem;">
+        <span style="color: var(--text-muted);">Filtered by tag:</span>
+        <span id="active-tag-name" style="font-family: var(--font-mono); color: var(--text-primary); font-weight: 600;">#tag</span>
+        <button type="button" id="clear-tag-btn" style="color: var(--text-muted); cursor: pointer;">✕</button>
+      </div>
+
+      <!-- Sleek Task Rows List (No Giant Cards) -->
+      <section id="tasks-grid" class="task-list-container" aria-label="Tasks List">
+        <!-- Rendered dynamically as sleek rows -->
+      </section>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- VIEW 3: CINEMATIC ANALYTICS                                         -->
+    <!-- ==================================================================== -->
+    <div id="view-analytics" role="tabpanel" aria-labelledby="tab-analytics" style="display: none; padding-top: 2.5rem;">
+      <div class="section-head" style="margin-bottom: 2.5rem;">
+        <div>
+          <h2 class="section-title">Workspace Analytics</h2>
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">Quantitative productivity and distribution metrics grounded in real project data.</p>
+        </div>
+      </div>
+
+      <div class="cinematic-analytics-grid">
+        <div class="chart-editorial-box">
+          <span class="chart-header-sub">Distribution by Priority</span>
+          <div id="priority-chart" class="minimal-bars-list"></div>
+        </div>
+
+        <div class="chart-editorial-box">
+          <span class="chart-header-sub">Distribution by Status</span>
+          <div id="status-chart" class="minimal-bars-list"></div>
+        </div>
+      </div>
+
+      <!-- 7-Day Completion Trend -->
+      <div style="margin-top: 4rem;">
+        <div class="section-head">
+          <span class="chart-header-sub">Completed in Last 7 Days</span>
+        </div>
+        <div id="completion-chart" class="trend-days-strip"></div>
+      </div>
+
+      <!-- Raw Activity Collapsible -->
+      <details id="activity-panel" style="margin-top: 3.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-subtle);">
+        <summary style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; text-transform: uppercase; letter-spacing: 0.08em;">
+          <span>Raw Event Log</span>
+        </summary>
+        <ol id="activity-list" style="list-style: none; margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">
+          <li class="chart-empty">Click to load history</li>
+        </ol>
+      </details>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- VIEW 4: ACTIVITY TIMELINE                                           -->
+    <!-- ==================================================================== -->
+    <div id="view-activity" role="tabpanel" aria-labelledby="tab-activity" style="display: none; padding-top: 2.5rem;">
+      <div class="section-head" style="margin-bottom: 2rem;">
+        <div>
+          <h2 class="section-title">Activity Timeline</h2>
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">Live audit stream of all collaborative updates across the workspace.</p>
+        </div>
+      </div>
+
+      <div id="full-activity-timeline" class="timeline-stream" style="max-width: 720px;">
+        <p class="chart-empty">Loading workspace activity...</p>
+      </div>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- VIEW 5: TEAM DIRECTORY & INVITATIONS                                -->
+    <!-- ==================================================================== -->
+    <div id="view-team" role="tabpanel" aria-labelledby="tab-team" style="display: none; padding-top: 2.5rem;">
+      <!-- Pending Invitations for Current User -->
+      <div id="user-invitations-container" style="display: none; margin-bottom: 2rem;">
+        <div class="invitation-banner">
+          <div style="font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-text); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+            <span>Workspace Invitations</span>
+          </div>
+          <div id="user-invitations-list" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
+        </div>
+      </div>
+
+      <div class="section-head" style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
+        <div>
+          <h2 class="section-title">Team Members</h2>
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">Collaborators registered in this workspace with live presence.</p>
+        </div>
+        <button type="button" id="open-invite-modal-btn" class="btn-primary-action" style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0.85rem; font-size: 0.78rem;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>+ Invite People</span>
+        </button>
+      </div>
+
+      <div id="team-grid-container" class="team-table">
+        <p class="chart-empty">Loading team members...</p>
+      </div>
+
+      <!-- Pending Sent Invitations (Admin / Owner view) -->
+      <div id="workspace-invitations-section" style="display: none; margin-top: 2.5rem;">
+        <div style="font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.75rem;">
+          Pending Sent Invitations
+        </div>
+        <div id="workspace-invitations-list" class="team-table"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ==================================================================== -->
+  <!-- IMMERSIVE TASK DETAIL DRAWER (RAYCAST / LINEAR STYLE)                -->
+  <!-- ==================================================================== -->
+  <div id="task-drawer-backdrop" class="drawer-backdrop" style="display: none;">
+    <div id="task-drawer" class="task-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-task-title">
+      <!-- Top Bar -->
+      <div class="drawer-top-bar">
+        <div class="drawer-status-tags">
+          <span id="drawer-priority-badge" class="tag-badge">MEDIUM</span>
+          <span id="drawer-status-badge" class="tag-badge">IN PROGRESS</span>
+        </div>
+        <button type="button" id="drawer-close-btn" class="drawer-close" title="Close (Esc)" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Live Viewers Bar -->
+      <div id="drawer-viewers-bar" class="drawer-presence-banner" style="display: none;">
+        <span class="dot-online"></span>
+        <span id="drawer-viewers-text">Viewing this task</span>
+      </div>
+
+      <!-- Scrollable Body -->
+      <div class="drawer-content-scroll">
+        <h2 id="drawer-task-title" class="drawer-task-heading">Task Title</h2>
+        <div id="drawer-task-desc" class="drawer-description-text">Description...</div>
+
+        <!-- Two-Column Attributes -->
+        <div class="drawer-attributes-table">
+          <span class="attr-name">Status</span>
+          <div class="attr-val">
+            <select id="drawer-status-select" class="minimal-select" style="padding: 0.25rem 0.5rem; font-size: 0.78rem;">
+              <option value="todo">Todo</option>
+              <option value="in-progress">In Progress</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+
+          <span class="attr-name">Priority</span>
+          <div class="attr-val">
+            <select id="drawer-priority-select" class="minimal-select" style="padding: 0.25rem 0.5rem; font-size: 0.78rem;">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+
+          <span class="attr-name">Due Date</span>
+          <span id="drawer-due-date" class="attr-val" style="font-family: var(--font-mono);">No due date</span>
+
+          <span class="attr-name">Created By</span>
+          <span id="drawer-creator" class="attr-val">User</span>
+
+          <span class="attr-name">Reminder</span>
+          <span id="drawer-reminder" class="attr-val" style="font-family: var(--font-mono);">None</span>
+
+          <span class="attr-name">Repeats</span>
+          <span id="drawer-repeat" class="attr-val">Does not repeat</span>
+
+          <span class="attr-name">Tags</span>
+          <div id="drawer-tags-container" class="attr-val" style="display: flex; gap: 0.35rem; flex-wrap: wrap;"></div>
+
+          <span class="attr-name">Timestamps</span>
+          <span id="drawer-timestamps" class="attr-val" style="font-size: 0.72rem; color: var(--text-muted);"></span>
+        </div>
+
+        <!-- Comments Stream -->
+        <div>
+          <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 0.75rem;">
+            <span class="drawer-section-title">Comments (<span id="drawer-comments-count">0</span>)</span>
+          </div>
+          <div id="drawer-comments-list" style="display: flex; flex-direction: column;">
+            <p class="chart-empty">No comments yet</p>
+          </div>
+          <form id="drawer-comment-form">
+            <textarea id="drawer-comment-input" class="comment-input-area" placeholder="Write a comment..." rows="2" required></textarea>
+            <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+              <button type="submit" class="btn-primary-action" style="font-size: 0.75rem; padding: 0.35rem 0.75rem;">Post Comment</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Task Specific Audit History -->
+        <div style="padding-top: 1rem; border-top: 1px solid var(--border-subtle);">
+          <span class="drawer-section-title">Audit Trail</span>
+          <div id="drawer-task-history" class="timeline-stream" style="margin-top: 0.85rem;">
+            <p class="chart-empty">No history recorded</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Drawer Bottom Bar -->
+      <div class="drawer-bottom-bar">
+        <button type="button" id="drawer-toggle-complete-btn" class="btn-secondary-action">Mark Complete</button>
+        <div style="display: flex; gap: 0.5rem;">
+          <button type="button" id="drawer-edit-btn" class="btn-secondary-action">Edit</button>
+          <button type="button" id="drawer-delete-btn" class="btn-danger-action">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- MODAL: CREATE / EDIT TASK                                           -->
+  <!-- ==================================================================== -->
+  <div id="task-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-title" class="modal-title">Create New Task</h3>
+        <button type="button" id="modal-close-btn" class="drawer-close" aria-label="Close modal">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <form id="task-form">
+        <div class="modal-body">
+          <input type="hidden" id="task-id">
+
+          <!-- Title -->
+          <div class="form-group">
+            <label class="form-label" for="task-title">Title</label>
+            <input type="text" id="task-title" class="form-input" placeholder="What needs to be done?" required maxlength="200" autocomplete="off">
+          </div>
+
+          <!-- Description -->
+          <div class="form-group">
+            <label class="form-label" for="task-desc">Description</label>
+            <textarea id="task-desc" class="form-textarea" placeholder="Add context, acceptance criteria, or links..." maxlength="2000" rows="3"></textarea>
+          </div>
+
+          <!-- Attributes Grid -->
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem;">
+            <div class="form-group">
+              <label class="form-label" for="task-due-date">Due Date</label>
+              <input type="date" id="task-due-date" class="form-input">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="task-priority">Priority</label>
+              <select id="task-priority" class="minimal-select" style="width: 100%;">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="task-status">Status</label>
+              <select id="task-status" class="minimal-select" style="width: 100%;">
+                <option value="todo" selected>Todo</option>
+                <option value="in-progress">In Progress</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Tags -->
+          <div class="form-group">
+            <label class="form-label" for="task-tags">Tags</label>
+            <input type="text" id="task-tags" class="form-input" placeholder="backend, api, urgent (comma separated)">
+          </div>
+
+          <!-- Reminder Presets & Recurring -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div class="form-group">
+              <label class="form-label" for="task-reminder-preset">Reminder</label>
+              <select id="task-reminder-preset" class="minimal-select" style="width: 100%;" onchange="handleReminderPresetChange(this.value)">
+                <option value="none" selected>None</option>
+                <option value="10m">10 minutes before</option>
+                <option value="1h">1 hour before</option>
+                <option value="tomorrow">Tomorrow (9:00 AM)</option>
+                <option value="custom">Custom Date & Time</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="task-repeat">Recurring</label>
+              <select id="task-repeat" class="minimal-select" style="width: 100%;">
+                <option value="">Does not repeat</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Custom Reminder Time (Conditional) -->
+          <div class="form-group" id="custom-reminder-container" style="display: none;">
+            <label class="form-label" for="task-reminder">Custom Date & Time</label>
+            <input type="datetime-local" id="task-reminder" class="form-input">
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="modal-cancel-btn" class="btn-secondary-action">Cancel</button>
+          <button type="submit" class="btn-primary-action">Save Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- MODAL: INVITE TO WORKSPACE                                           -->
+  <!-- ==================================================================== -->
+  <div id="invite-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="invite-modal-title" style="display: none;">
+    <div class="modal-card" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 id="invite-modal-title" class="modal-title">Invite to Workspace</h3>
+        <button type="button" id="invite-modal-close-btn" class="drawer-close" aria-label="Close modal">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <form id="invite-form">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
+          <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0; line-height: 1.4;">
+            Invite a teammate to collaborate in your workspace with live presence and real-time tasks.
+          </p>
+
+          <div class="form-group">
+            <label class="form-label" for="invite-email">Email</label>
+            <input type="email" id="invite-email" class="form-input" placeholder="colleague@taskflow.dev" required autocomplete="off">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="invite-role">Role</label>
+            <select id="invite-role" class="minimal-select" style="width: 100%;">
+              <option value="member" selected>Member</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+
+          <div id="invite-error" style="display: none; font-size: 0.78rem; color: var(--danger); background-color: var(--danger-muted); padding: 0.5rem 0.75rem; border-radius: var(--radius-sm); border: 1px solid rgba(239, 68, 68, 0.2);"></div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="invite-cancel-btn" class="btn-secondary-action">Cancel</button>
+          <button type="submit" id="invite-submit-btn" class="btn-primary-action">Send Invitation</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="profile-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
+    <div class="modal-card" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 id="profile-modal-title" class="modal-title">Edit profile</h3>
+        <button type="button" id="profile-modal-close" class="drawer-close" aria-label="Close profile editor">×</button>
+      </div>
+      <form id="profile-form">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div class="profile-avatar-editor">
+            <span class="user-avatar-initial profile-avatar-preview" id="profile-avatar-preview"><span id="profile-avatar-initial">M</span><img id="profile-avatar-image" alt="Profile image preview" hidden></span>
+            <label class="form-label" for="profile-avatar-file">Profile image</label>
+            <input type="file" id="profile-avatar-file" class="form-input" accept="image/png,image/jpeg,image/webp">
+            <button type="button" id="profile-avatar-remove" class="btn-secondary-action">Remove image</button>
+            <span class="profile-help-text">PNG, JPEG, or WebP. Maximum 1 MB.</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="profile-name">Name</label>
+            <input type="text" id="profile-name" class="form-input" required maxlength="100" autocomplete="name">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="profile-email">Email</label>
+            <input type="email" id="profile-email" class="form-input" required autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="profile-password">New password</label>
+            <input type="password" id="profile-password" class="form-input" minlength="6" autocomplete="new-password" placeholder="Leave blank to keep current password">
+          </div>
+          <div id="profile-error" class="profile-error" role="alert" hidden></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="profile-modal-cancel" class="btn-secondary-action">Cancel</button>
+          <button type="submit" id="profile-save-btn" class="btn-primary-action">Save profile</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="/socket.io/socket.io.js" onerror="this.onerror=null;this.src='https://cdn.socket.io/4.7.5/socket.io.min.js'"></script>
+  <script src="js/tasks.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Set human readable current date
+      const dateEl = document.getElementById('current-date-text');
+      if (dateEl) {
+        const today = new Date();
+        dateEl.textContent = today.toLocaleDateString(undefined, {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric'
+        }).toUpperCase();
+      }
+      initDashboard();
+    });
+  </script>
+</body>
+</html>
