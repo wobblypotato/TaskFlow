@@ -114,9 +114,7 @@ function showToast(message, type = 'success') {
   container.appendChild(toast);
 
   setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateY(8px)';
-    toast.style.transition = 'all 0.2s ease';
+    toast.classList.add('toast-dismiss');
     setTimeout(() => toast.remove(), 200);
   }, 3500);
 }

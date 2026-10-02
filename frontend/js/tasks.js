@@ -98,8 +98,9 @@ async function checkDbHealth() {
 function updateHeaderGreetingAndDate(user) {
   const now = new Date();
   const hour = now.getHours();
-  const greetingTime = hour < 12 ? 'GOOD MORNING' : hour < 18 ? 'GOOD AFTERNOON' : 'GOOD EVENING';
-  const displayName = user?.name ? user.name.toUpperCase() : 'MOKSH';
+  const greetingTime = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const rawName = user?.name?.trim() || 'Moksh';
+  const displayName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
 
   const userNameEl = document.getElementById('user-name');
   const userAvatarInitial = document.getElementById('user-avatar-initial');
@@ -112,11 +113,10 @@ function updateHeaderGreetingAndDate(user) {
   if (heroGreetingEl) heroGreetingEl.textContent = `${greetingTime}, ${displayName}`;
 
   if (currentDateEl) {
-    const dayName = now.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+    const dayName = now.toLocaleDateString('en-US', { weekday: 'short' });
     const dayNum = now.getDate();
-    const monthName = now.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
-    const year = now.getFullYear();
-    currentDateEl.textContent = `${dayName}, ${dayNum} ${monthName} ${year}`;
+    const monthName = now.toLocaleDateString('en-US', { month: 'short' });
+    currentDateEl.textContent = `${dayName}, ${monthName} ${dayNum}`;
   }
 }
 
@@ -129,6 +129,61 @@ function setAvatarDisplay(initialElement, imageElement, name, avatar) {
   if (hasAvatar) imageElement.src = avatar;
   else imageElement.removeAttribute('src');
   if (initialElement) initialElement.hidden = hasAvatar;
+}
+
+function closeModalWithMotion(modalEl, onDone) {
+  if (!modalEl) return;
+  if (!modalEl.classList.contains('active')) {
+    if (onDone) onDone();
+    return;
+  }
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    modalEl.classList.remove('active', 'modal-closing');
+    if (onDone) onDone();
+    return;
+  }
+  modalEl.classList.add('modal-closing');
+  setTimeout(() => {
+    modalEl.classList.remove('active', 'modal-closing');
+    if (onDone) onDone();
+  }, 180);
+}
+
+function animateNumberValue(element, targetValue, duration = 450, suffix = '') {
+  if (!element) return;
+  const target = Math.round(Number(targetValue) || 0);
+  const currentClean = String(element.textContent || '').replace(/[^0-9.-]/g, '');
+  const start = Number(currentClean) || 0;
+
+  if (start === target || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    element.textContent = target + suffix;
+    return;
+  }
+
+  if (element._animFrame) {
+    cancelAnimationFrame(element._animFrame);
+    element._animFrame = null;
+  }
+
+  const startTime = performance.now();
+  const easeOut = (t) => 1 - Math.pow(1 - t, 4);
+
+  function tick(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(1, elapsed / duration);
+    const eased = easeOut(progress);
+    const current = Math.round(start + (target - start) * eased);
+    element.textContent = current + suffix;
+
+    if (progress < 1) {
+      element._animFrame = requestAnimationFrame(tick);
+    } else {
+      element.textContent = target + suffix;
+      element._animFrame = null;
+    }
+  }
+
+  element._animFrame = requestAnimationFrame(tick);
 }
 
 function setupProfileMenu() {
@@ -156,7 +211,7 @@ function setupProfileMenu() {
     menuDropdown.hidden = true;
     menuToggle.setAttribute('aria-expanded', 'false');
   };
-  const closeModal = () => modal.classList.remove('active');
+  const closeModal = () => closeModalWithMotion(modal);
   const displayAvatar = (name, avatar) => {
     setAvatarDisplay(
       document.getElementById('profile-avatar-initial'),
@@ -186,6 +241,7 @@ function setupProfileMenu() {
       displayAvatar(user.name, user.avatar);
       if (errorElement) errorElement.hidden = true;
       closeMenu();
+      modal.classList.remove('modal-closing');
       modal.classList.add('active');
       nameInput.focus();
     });
@@ -531,32 +587,70 @@ function setupNavigationTabs() {
   });
 }
 
+const TAB_ORDER = ['overview', 'tasks', 'analytics', 'activity', 'team'];
+
 function switchToTab(key) {
-  activeTab = key;
-  const tabs = ['overview', 'tasks', 'analytics', 'activity', 'team'];
+  if (activeTab === key) return;
 
-  tabs.forEach((t) => {
-    const btn = document.getElementById(`tab-${t}`);
-    const view = document.getElementById(`view-${t}`);
-    const isActive = t === key;
+  const prevIndex = TAB_ORDER.indexOf(activeTab);
+  const nextIndex = TAB_ORDER.indexOf(key);
+  const direction = (nextIndex >= 0 && prevIndex >= 0 && nextIndex < prevIndex) ? 'backward' : 'forward';
 
-    if (btn) {
-      btn.classList.toggle('active', isActive);
-      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-    }
-    if (view) {
-      view.style.display = isActive ? 'block' : 'none';
-    }
-  });
+  document.documentElement.dataset.navDirection = direction;
 
-  if (key === 'activity') loadFullActivity();
-  if (key === 'team') loadTeamMembers();
-  if (key === 'analytics') {
-    const activityPanel = document.getElementById('activity-panel');
-    if (activityPanel && !activityPanel.open) {
-      activityPanel.open = true;
-      activityPanel.dispatchEvent(new Event('toggle'));
+  const oldView = document.getElementById(`view-${activeTab}`);
+  const newView = document.getElementById(`view-${key}`);
+
+  const performTabSwitch = () => {
+    activeTab = key;
+
+    TAB_ORDER.forEach((t) => {
+      const btn = document.getElementById(`tab-${t}`);
+      const view = document.getElementById(`view-${t}`);
+      const isActive = t === key;
+
+      if (btn) {
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      }
+      if (view) {
+        if (isActive) {
+          view.style.display = 'block';
+          view.style.viewTransitionName = 'active-view';
+          view.classList.remove('nav-flow-forward', 'nav-flow-backward');
+          if (!document.startViewTransition || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            void view.offsetWidth;
+            view.classList.add(direction === 'forward' ? 'nav-flow-forward' : 'nav-flow-backward');
+          }
+        } else {
+          view.style.display = 'none';
+          view.style.viewTransitionName = 'none';
+          view.classList.remove('nav-flow-forward', 'nav-flow-backward');
+        }
+      }
+    });
+
+    if (key === 'activity') loadFullActivity();
+    if (key === 'team') loadTeamMembers();
+    if (key === 'analytics') {
+      const activityPanel = document.getElementById('activity-panel');
+      if (activityPanel && !activityPanel.open) {
+        activityPanel.open = true;
+        activityPanel.dispatchEvent(new Event('toggle'));
+      }
     }
+  };
+
+  if (document.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (oldView) oldView.style.viewTransitionName = 'active-view';
+    const transition = document.startViewTransition(() => performTabSwitch());
+    transition.finished.finally(() => {
+      document.querySelectorAll('[id^="view-"]').forEach((v) => {
+        v.style.viewTransitionName = '';
+      });
+    });
+  } else {
+    performTabSwitch();
   }
 }
 
@@ -606,21 +700,27 @@ async function loadDashboardStats() {
     const scopeParam = activeScope === 'my' ? '?scope=my' : '?scope=workspace';
     const stats = await api.get(`/tasks/stats${scopeParam}`);
 
-    if (statTotal) statTotal.textContent = stats.total ?? 0;
-    if (statCompleted) statCompleted.textContent = stats.completed ?? 0;
-    if (statPending) statPending.textContent = stats.pending ?? 0;
-    if (statOverdue) statOverdue.textContent = stats.overdue ?? 0;
+    if (statTotal) animateNumberValue(statTotal, stats.total ?? 0, 450);
+    if (statCompleted) animateNumberValue(statCompleted, stats.completed ?? 0, 450);
+    if (statPending) animateNumberValue(statPending, stats.pending ?? 0, 450);
+    if (statOverdue) {
+      animateNumberValue(statOverdue, stats.overdue ?? 0, 450);
+      const overdueItem = statOverdue.closest('.metric-item');
+      if (overdueItem) {
+        overdueItem.classList.toggle('has-overdue', (stats.overdue || 0) > 0);
+      }
+    }
     const rate = stats.total ? Math.round((stats.completed / stats.total) * 100) : 0;
-    if (statCompletionRate) statCompletionRate.textContent = `${rate}%`;
+    if (statCompletionRate) animateNumberValue(statCompletionRate, rate, 500, '% done');
 
     const tabTasksCount = document.getElementById('tab-tasks-count');
-    if (tabTasksCount) tabTasksCount.textContent = stats.total ?? 0;
+    if (tabTasksCount) animateNumberValue(tabTasksCount, stats.total ?? 0, 400);
 
-    renderMetricBars('priority-chart', stats.byPriority, { high: 'var(--danger)', medium: 'var(--warning)', low: 'var(--text-muted)' });
-    renderMetricBars('status-chart', stats.byStatus, { todo: 'var(--text-dim)', 'in-progress': 'var(--info)', completed: 'var(--success)' });
+    renderMetricBars('priority-chart', stats.byPriority, { high: 'var(--state-overdue)', medium: 'var(--state-upcoming)', low: 'var(--state-neutral)' });
+    renderMetricBars('status-chart', stats.byStatus, { todo: 'var(--state-neutral)', 'in-progress': 'var(--state-inprogress)', completed: 'var(--state-completed)' });
 
-    renderMetricBars('dashboard-mini-status', stats.byStatus, { todo: 'var(--text-dim)', 'in-progress': 'var(--info)', completed: 'var(--success)' });
-    renderMetricBars('dashboard-mini-priority', stats.byPriority, { high: 'var(--danger)', medium: 'var(--warning)', low: 'var(--text-muted)' });
+    renderMetricBars('dashboard-mini-status', stats.byStatus, { todo: 'var(--state-neutral)', 'in-progress': 'var(--state-inprogress)', completed: 'var(--state-completed)' });
+    renderMetricBars('dashboard-mini-priority', stats.byPriority, { high: 'var(--state-overdue)', medium: 'var(--state-upcoming)', low: 'var(--state-neutral)' });
 
     renderTrendGraphic(stats.completedByDay || []);
 
@@ -635,7 +735,7 @@ function renderMetricBars(elementId, values = [], colorMap = {}) {
   if (!container) return;
 
   if (!values.length) {
-    container.innerHTML = '<p class="chart-empty">No data</p>';
+    container.innerHTML = '<span class="empty-mini-text">No activity recorded</span>';
     return;
   }
 
@@ -701,6 +801,8 @@ function renderProductivityVelocityWidget(stats) {
   if (!barsContainer) return;
 
   const completedByDay = stats.completedByDay || [];
+  const todayIso = new Date().toISOString().slice(0, 10);
+
   const days = Array.from({ length: 7 }, (_, index) => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -709,7 +811,9 @@ function renderProductivityVelocityWidget(stats) {
     const entry = completedByDay.find((item) => item._id === key);
     const count = entry ? entry.count : 0;
     return {
-      dayLabel: d.toLocaleDateString('en-US', { weekday: 'narrow' }),
+      key,
+      isToday: key === todayIso,
+      dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),
       formattedDate: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       count
     };
@@ -720,23 +824,25 @@ function renderProductivityVelocityWidget(stats) {
     shippedStat.textContent = `${weeklyShipped} shipped this week`;
   }
 
-  const rate = stats.completionRate ?? 0;
+  const rate = stats.total ? Math.round(((stats.completed || 0) / stats.total) * 100) : 0;
   if (trackFill) trackFill.style.width = `${rate}%`;
-  if (rateText) rateText.textContent = `${rate}% complete`;
-  if (totalText) totalText.textContent = `${stats.total ?? 0} total tasks`;
+  if (rateText) rateText.textContent = `${rate}% completed`;
+  if (totalText) totalText.textContent = `${stats.completed || 0} of ${stats.total || 0} tasks done`;
 
   const max = Math.max(1, ...days.map((d) => d.count));
 
   barsContainer.innerHTML = days
     .map((d) => {
-      const heightPercent = d.count > 0 ? Math.max(20, Math.round((d.count / max) * 100)) : 8;
-      const opacity = d.count > 0 ? '1' : '0.25';
+      const heightPercent = d.count > 0 ? Math.max(22, Math.round((d.count / max) * 100)) : 10;
+      const barClass = d.count > 0 ? 'has-output' : 'no-output';
+      const todayClass = d.isToday ? 'is-today' : '';
       return `
-        <div class="viz-day-col" title="${d.count} tasks completed on ${d.formattedDate}">
-          <div class="viz-day-track">
-            <div class="viz-day-fill" style="height: ${heightPercent}%; opacity: ${opacity};"></div>
+        <div class="velocity-day-column ${todayClass}" title="${d.count} tasks completed on ${d.formattedDate}">
+          <span class="velocity-count-badge ${d.count > 0 ? 'active' : ''}">${d.count > 0 ? d.count : '—'}</span>
+          <div class="velocity-bar-track">
+            <div class="velocity-bar-fill ${barClass}" style="height: ${heightPercent}%;"></div>
           </div>
-          <span class="viz-day-name">${d.dayLabel}</span>
+          <span class="velocity-day-label">${d.dayName}</span>
         </div>
       `;
     })
@@ -773,16 +879,21 @@ function renderUpcomingDeadlinesWidget() {
 
   if (!upcomingTasks.length) {
     container.innerHTML = `
-      <div class="deadlines-empty-editorial">
-        <div class="deadlines-empty-status">
-          <span class="dot-online" style="background-color: var(--success); width: 6px; height: 6px;"></span>
-          <span class="empty-status-title">All Deadlines Cleared</span>
+      <div class="empty-state-designed calm-emerald">
+        <div class="empty-state-icon emerald" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+          </svg>
         </div>
-        <p class="empty-status-sub">No pending tasks with impending due dates.</p>
+        <div class="empty-state-copy">
+          <p class="empty-state-title">All deadlines clear</p>
+          <p class="empty-state-sub">No impending due dates scheduled. You are on top of your work.</p>
+        </div>
         ${unscheduledTasks.length > 0 ? `
-          <div class="unscheduled-focus-row">
-            <span class="unscheduled-pill">${unscheduledTasks.length} unscheduled pending task${unscheduledTasks.length === 1 ? '' : 's'}</span>
-            <button type="button" class="btn-text-action" onclick="focusUnscheduledTasks()">Focus on pending →</button>
+          <div class="unscheduled-focus-row" style="margin-top:0.4rem;">
+            <span class="unscheduled-pill">${unscheduledTasks.length} pending task${unscheduledTasks.length === 1 ? '' : 's'} without a due date</span>
+            <button type="button" class="btn-subtle" onclick="focusUnscheduledTasks()">Schedule them &rarr;</button>
           </div>
         ` : ''}
       </div>
@@ -796,36 +907,49 @@ function renderUpcomingDeadlinesWidget() {
       const diffDays = Math.ceil((due - now) / (1000 * 60 * 60 * 24));
 
       let dueText = due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-      let isUrgent = false;
+      let dueClass = 'due-normal';
 
       if (diffDays < 0) {
-        dueText = `Overdue (${Math.abs(diffDays)}d)`;
-        isUrgent = true;
+        dueText = `${Math.abs(diffDays)}d overdue`;
+        dueClass = 'due-overdue';
       } else if (diffDays === 0) {
-        dueText = 'Due Today';
-        isUrgent = true;
+        dueText = 'Due today';
+        dueClass = 'due-today';
       } else if (diffDays === 1) {
         dueText = 'Tomorrow';
+        dueClass = 'due-soon';
+      } else if (diffDays <= 3) {
+        dueText = `In ${diffDays} days`;
+        dueClass = 'due-soon';
       }
 
-      const priorityColor =
-        task.priority === 'high' ? 'var(--danger)' : task.priority === 'medium' ? 'var(--warning)' : 'var(--text-dim)';
+      const priorityLabel = task.priority || 'medium';
+      const statusIcon = task.status === 'in-progress' 
+        ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="task-state-icon in-progress"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`
+        : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="task-state-icon todo"><circle cx="12" cy="12" r="9"/></svg>`;
 
       return `
-        <div class="upcoming-item" onclick="openTaskDrawer('${task._id}')">
-          <div style="display:flex;align-items:center;gap:0.5rem;overflow:hidden;">
-            <span class="dot-online" style="background-color:${priorityColor};"></span>
-            <span class="upcoming-item-title">${escapeHtml(task.title)}</span>
+        <div class="upcoming-task-card" onclick="openTaskDrawer('${task._id}')" role="button" tabindex="0" aria-label="Open task ${escapeHtml(task.title)}">
+          <div class="upcoming-task-left">
+            <span class="upcoming-task-status" title="${task.status}">${statusIcon}</span>
+            <span class="upcoming-task-title">${escapeHtml(task.title)}</span>
           </div>
-          <span class="upcoming-item-due ${isUrgent ? 'urgent' : ''}">${dueText}</span>
+          <div class="upcoming-task-right">
+            <span class="task-priority-pill priority-${priorityLabel}">${priorityLabel}</span>
+            <span class="upcoming-due-badge ${dueClass}">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+              ${dueText}
+            </span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="upcoming-arrow"><polyline points="9 18 15 12 9 6"/></svg>
+          </div>
         </div>
       `;
     })
     .join('') + `
       <div class="deadlines-footer-meta">
-        <span>●</span>
+        <span class="meta-dot"></span>
         <span>${upcomingTasks.length} scheduled</span>
-        <span>·</span>
+        <span class="meta-sep">·</span>
         <span>${unscheduledTasks.length} unscheduled</span>
       </div>
     `;
@@ -836,7 +960,7 @@ function focusUnscheduledTasks() {
   if (statusFilter) statusFilter.value = 'all';
   if (priorityFilter) priorityFilter.value = 'all';
   const unscheduled = currentTasks.filter((t) => !t.dueDate && t.status !== 'completed');
-  renderTasksList(unscheduled);
+  renderTasks(unscheduled);
   showToast(`Filtered to ${unscheduled.length} unscheduled tasks`);
 }
 
@@ -847,30 +971,49 @@ async function renderMiniActivityWidget() {
   try {
     const activities = await api.get('/tasks/activity?limit=4');
     if (!activities || !activities.length) {
-      container.innerHTML = '<p class="chart-empty">No recent activity</p>';
+      container.innerHTML = `
+        <div class="empty-state-designed quiet">
+          <p class="empty-state-title">No recent activity</p>
+          <p class="empty-state-sub">Activity and updates across your workspace will stream here live.</p>
+        </div>
+      `;
       return;
     }
 
     container.innerHTML = activities
       .map((entry) => {
         const timeAgo = formatRelativeTime(entry.createdAt);
-        const actor = entry.userId?.name || 'Someone';
-        const taskTitle = entry.taskId?.title || 'a task';
-        const verb = formatActionVerb(entry.action);
+        const actor = entry.userId?.name || 'Teammate';
+        const taskTitle = entry.taskId?.title || 'task';
+        const actionVerb = formatActionVerb(entry.action);
+        const initial = (actor.charAt(0) || 'T').toUpperCase();
+
+        let actionBadgeClass = 'action-default';
+        if (entry.action === 'created') actionBadgeClass = 'action-created';
+        else if (entry.action === 'completed') actionBadgeClass = 'action-completed';
+        else if (entry.action === 'deleted') actionBadgeClass = 'action-deleted';
 
         return `
-          <div class="timeline-entry">
-            <span class="timeline-dot"></span>
-            <div class="timeline-time">${timeAgo}</div>
-            <div class="timeline-desc">
-              <strong>${escapeHtml(actor)}</strong> ${verb} "${escapeHtml(taskTitle)}"
+          <div class="activity-feed-item">
+            <div class="activity-avatar" title="${escapeHtml(actor)}">${initial}</div>
+            <div class="activity-content">
+              <p class="activity-text">
+                <span class="activity-actor">${escapeHtml(actor)}</span>
+                <span class="activity-verb ${actionBadgeClass}">${actionVerb}</span>
+                <span class="activity-target">"${escapeHtml(taskTitle)}"</span>
+              </p>
+              <span class="activity-time">${timeAgo}</span>
             </div>
           </div>
         `;
       })
       .join('');
   } catch {
-    container.innerHTML = '<p class="chart-empty">Could not load activity</p>';
+    container.innerHTML = `
+      <div class="empty-state-designed quiet">
+        <p class="empty-state-title">Activity temporarily unavailable</p>
+      </div>
+    `;
   }
 }
 
@@ -1025,12 +1168,36 @@ function renderTasks(tasks) {
 
   if (!tasks || tasks.length === 0) {
     tasksGrid.innerHTML = `
-      <div style="padding: 4rem 1rem; text-align: center;">
-        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">No tasks found in this view.</p>
-        <button type="button" class="btn-primary-action" onclick="openTaskModal()">Create New Task</button>
+      <div class="empty-state-designed" style="margin: 2.5rem auto; max-width: 480px; align-items: center; text-align: center;">
+        <div class="empty-state-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+        </div>
+        <div class="empty-state-copy" style="align-items: center;">
+          <p class="empty-state-title">No tasks found</p>
+          <p class="empty-state-sub">There are no tasks matching your active filters or scope.</p>
+        </div>
+        <button type="button" class="btn btn-sm btn-primary" onclick="openTaskModal()" style="margin-top: 0.25rem;">
+          Create task
+        </button>
       </div>
     `;
     return;
+  }
+
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const firstPositions = new Map();
+
+  if (!prefersReduced) {
+    tasksGrid.querySelectorAll('.task-row[id]').forEach((row) => {
+      const rect = row.getBoundingClientRect();
+      firstPositions.set(row.id, { top: rect.top, left: rect.left });
+    });
   }
 
   const now = new Date();
@@ -1047,7 +1214,7 @@ function renderTasks(tasks) {
         dueDateFormatted = d.toLocaleDateString(undefined, {
           month: 'short',
           day: 'numeric'
-        }).toUpperCase();
+        });
       }
 
       const commentsCount = task.commentsCount || 0;
@@ -1080,9 +1247,9 @@ function renderTasks(tasks) {
           </div>
 
           <div class="task-meta-col">
-            <span class="tag-badge priority-badge-${task.priority}">${task.priority.toUpperCase()}</span>
-            <span class="status-badge">${escapeHtml(task.status.replace('-', ' '))}</span>
-            ${task.dueDate ? `<span class="date-badge ${isOverdue ? 'is-overdue' : ''}">${isOverdue ? '!' : ''} ${dueDateFormatted}</span>` : ''}
+            <span class="tag-badge priority-badge-${task.priority}">${escapeHtml(task.priority)}</span>
+            <span class="status-badge status-${task.status}">${escapeHtml(task.status.replace('-', ' '))}</span>
+            ${task.dueDate ? `<span class="date-badge ${isOverdue ? 'is-overdue' : ''}">${isOverdue ? '! ' : ''}${dueDateFormatted}</span>` : ''}
             ${commentsCount > 0 ? `<span class="task-comment-count">💬 ${commentsCount}</span>` : ''}
             ${viewersHtml}
 
@@ -1095,6 +1262,43 @@ function renderTasks(tasks) {
       `;
     })
     .join('');
+
+  if (!prefersReduced && firstPositions.size > 0) {
+    const newRows = tasksGrid.querySelectorAll('.task-row[id]');
+    const rowsToAnimate = [];
+
+    newRows.forEach((row) => {
+      const first = firstPositions.get(row.id);
+      if (first) {
+        const last = row.getBoundingClientRect();
+        const deltaX = first.left - last.left;
+        const deltaY = first.top - last.top;
+
+        if (Math.abs(deltaY) > 0.5 || Math.abs(deltaX) > 0.5) {
+          row.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+          row.style.transition = 'none';
+          rowsToAnimate.push(row);
+        }
+      } else {
+        row.classList.add('task-row-entering');
+      }
+    });
+
+    if (rowsToAnimate.length > 0) {
+      void tasksGrid.offsetHeight;
+      requestAnimationFrame(() => {
+        rowsToAnimate.forEach((row) => {
+          row.style.transition = 'transform 320ms cubic-bezier(0.16, 1, 0.3, 1)';
+          row.style.transform = '';
+          const cleanup = () => {
+            row.style.transition = '';
+            row.removeEventListener('transitionend', cleanup);
+          };
+          row.addEventListener('transitionend', cleanup, { once: true });
+        });
+      });
+    }
+  }
 }
 
 function updateCardPresenceTag(taskId, viewers) {
@@ -1128,7 +1332,10 @@ async function openTaskDrawer(taskId) {
 
   if (socketInstance) socketInstance.emit('task:join', taskId);
 
-  if (taskDrawerBackdrop) taskDrawerBackdrop.style.display = 'flex';
+  if (taskDrawerBackdrop) {
+    taskDrawerBackdrop.classList.remove('drawer-closing');
+    taskDrawerBackdrop.style.display = 'flex';
+  }
 
   try {
     const task = await api.get(`/tasks/${taskId}`);
@@ -1149,7 +1356,19 @@ function closeTaskDrawer() {
     socketInstance.emit('task:leave', activeDrawerTaskId);
   }
   activeDrawerTaskId = null;
-  if (taskDrawerBackdrop) taskDrawerBackdrop.style.display = 'none';
+  if (!taskDrawerBackdrop) return;
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    taskDrawerBackdrop.style.display = 'none';
+    taskDrawerBackdrop.classList.remove('drawer-closing');
+    return;
+  }
+
+  taskDrawerBackdrop.classList.add('drawer-closing');
+  setTimeout(() => {
+    taskDrawerBackdrop.style.display = 'none';
+    taskDrawerBackdrop.classList.remove('drawer-closing');
+  }, 220);
 }
 
 function renderTaskDrawerDetails(task) {
@@ -1562,13 +1781,17 @@ function openInviteModal() {
     inviteError.style.display = 'none';
     inviteError.textContent = '';
   }
+  inviteModal.classList.remove('modal-closing');
+  inviteModal.classList.add('active');
   inviteModal.style.display = 'flex';
   if (inviteEmailInput) inviteEmailInput.focus();
 }
 
 function closeInviteModal() {
   if (!inviteModal) return;
-  inviteModal.style.display = 'none';
+  closeModalWithMotion(inviteModal, () => {
+    inviteModal.style.display = 'none';
+  });
 }
 
 async function loadUserInvitations() {
@@ -1808,15 +2031,17 @@ function openTaskModal(task = null) {
     if (taskRepeatInput) taskRepeatInput.value = '';
   }
 
+  taskModal.classList.remove('modal-closing');
   taskModal.classList.add('active');
   setTimeout(() => taskTitleInput.focus(), 50);
 }
 
 function closeTaskModal() {
   if (taskModal) {
-    taskModal.classList.remove('active');
-    editingTaskId = null;
-    taskForm.reset();
+    closeModalWithMotion(taskModal, () => {
+      editingTaskId = null;
+      taskForm.reset();
+    });
   }
 }
 
@@ -1907,6 +2132,14 @@ async function handleTaskFormSubmit(e) {
 
 async function toggleTaskStatus(taskId, currentStatus) {
   const newStatus = currentStatus === 'completed' ? 'todo' : 'completed';
+  const checkBtn = document.querySelector(`#task-${taskId} .task-check-circle`);
+  if (checkBtn) {
+    checkBtn.classList.toggle('checked', newStatus === 'completed');
+    checkBtn.textContent = newStatus === 'completed' ? '✓' : '';
+    checkBtn.style.transform = 'scale(0.86)';
+    setTimeout(() => { checkBtn.style.transform = ''; }, 140);
+  }
+
   try {
     await api.patch(`/tasks/${taskId}`, { status: newStatus });
     showToast(newStatus === 'completed' ? 'Task completed' : 'Task restored');
@@ -1923,6 +2156,12 @@ function editTask(taskId) {
 
 async function deleteTask(taskId) {
   if (!confirm('Delete this task?')) return;
+
+  const row = document.getElementById(`task-${taskId}`);
+  if (row && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    row.classList.add('task-row-exiting');
+    await new Promise((resolve) => setTimeout(resolve, 180));
+  }
 
   try {
     await api.delete(`/tasks/${taskId}`);
